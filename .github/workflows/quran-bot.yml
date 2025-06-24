@@ -1,1 +1,106 @@
+name: 🕌 Quran Telegram Bot
 
+on:
+  schedule:
+    # Run every hour at minute 0
+    - cron: '0 * * * *'
+  
+  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Run in test mode'
+        required: false
+        default: 'false'
+
+jobs:
+  post-verse:
+    name: 📤 Post Quranic Verse
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      with:
+        # This allows the workflow to commit back to the repo
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas requests
+        
+    - name: 🔍 Verify files
+      run: |
+        echo "📁 Repository contents:"
+        ls -la
+        
+        if [ -f "quran_dataset.csv" ]; then
+          echo "✅ Quran dataset found"
+          echo "📊 Dataset info:"
+          head -n 3 quran_dataset.csv
+        else
+          echo "❌ Quran dataset not found!"
+          exit 1
+        fi
+        
+        if [ -f "github_actions_bot.py" ]; then
+          echo "✅ Bot script found"
+        else
+          echo "❌ Bot script not found!"
+          exit 1
+        fi
+        
+    - name: 🤖 Run Quran Bot
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        echo "🚀 Starting Quran bot..."
+        python github_actions_bot.py
+        
+    - name: 💾 Commit updated state
+      run: |
+        # Configure git
+        git config --local user.email "action@github.com"
+        git config --local user.name "Quran Bot Action"
+        
+        # Add the state file if it exists
+        if [ -f "bot_state.json" ]; then
+          git add bot_state.json
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "📝 No state changes to commit"
+          else
+            echo "💾 Committing state changes..."
+            git commit -m "🤖 Update bot state - $(date '+%Y-%m-%d %H:%M:%S')"
+            git push
+            echo "✅ State committed successfully"
+          fi
+        else
+          echo "📝 No state file to commit"
+        fi
+        
+    - name: 📊 Workflow Summary
+      run: |
+        echo "## 🕌 Quran Bot Execution Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Time**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+        echo "- **Next run**: In 1 hour" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f "bot_state.json" ]; then
+          echo "### 📈 Progress" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          cat bot_state.json >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        fi
